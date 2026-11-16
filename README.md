@@ -28,3 +28,11 @@ Atur -> pilih mesin AI -> tempel key.
 5. Di perangkat lain: isi URL, kunci, dan **kode sinkron yang sama persis**.
 
 Data dienkripsi (AES-GCM) di perangkat sebelum dikirim. Server hanya menyimpan teks acak. Kode sinkron tidak pernah dikirim. Kalau kode hilang, data di server tidak bisa dibuka lagi. Kunci API Claude tidak ikut disinkronkan.
+
+## Memori dan kepribadian
+
+- **Memori**: asisten menyimpan hal penting yang Anda ceritakan sendiri (sifat, preferensi, tujuan, orang penting, rutinitas, peristiwa besar), maksimal 80 entri. Tetap ada walau chat dihapus.
+- **Layar Memori**: Pengaturan → "Memori dan kepribadian asisten". Di sana Anda bisa membaca, menambah, dan menghapus memori.
+- **Kepribadian**: tulis sendiri dengan kata-kata Anda (contoh: galak tapi peduli, tenang, santai) atau pilih contoh. Hanya mengubah gaya bicara.
+- Kata sandi, PIN, API key, dan nomor kartu/ID tidak pernah disimpan. Perintah "ingat ..." juga bekerja tanpa API key.
+- Memori dan kepribadian ikut tersinkron (terenkripsi) antar perangkat dan masuk ekspor/impor.

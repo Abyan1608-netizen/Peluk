@@ -23,6 +23,9 @@ function cleanItem(i){
     amount:Number.isFinite(amt)?amt:null,priority:[1,2,3].includes(+i.priority)?+i.priority:2,
     note:String(i.note||'').slice(0,300),done:!!i.done,created:+i.created||Date.now(),u:+i.u||0};
 }
+const MCAT=['tentang saya','preferensi','tujuan','orang','rutinitas','peristiwa'],MEM_MAX=80;
+const SENS=/(password|kata sandi|sandi|\bpin\b|api[ _-]?key|sk-[a-z0-9]|\b\d{12,19}\b|nomor kartu|\bcvv\b)/i;
+function cleanMem(arr){return(Array.isArray(arr)?arr:[]).filter(m=>m&&typeof m==='object'&&String(m.text||'').trim()).slice(0,200).map(m=>({id:/^[a-z0-9]{1,12}$/i.test(String(m.id))?String(m.id):uid(),text:String(m.text).trim().slice(0,200),cat:MCAT.includes(m.cat)?m.cat:'tentang saya',t:+m.t||Date.now(),u:+m.u||0}))}
 function cleanChat(c){
   return(Array.isArray(c)?c:[]).filter(m=>m&&['user','assistant'].includes(m.role)).slice(-60).map(m=>({
     id:/^[a-z0-9]{1,12}$/i.test(String(m.id))?String(m.id):uid(),role:m.role,text:String(m.text||'').slice(0,2000),
@@ -33,12 +36,13 @@ const isMoney=i=>MONEY.includes(i.type);
 
 /* ===================== DATA ===================== */
 const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
-const save=()=>{stamp();localStorage.setItem('sl_data',JSON.stringify({items:items,chat:chat}));scheduleSync()};
-let {items=[],chat=[]}=load('sl_data',{});
-let st=Object.assign({provider:'anthropic',key:'',model:'claude-haiku-5-5',target:10000000,tts:false},load('sl_set',{}));
+const persist=()=>localStorage.setItem('sl_data',JSON.stringify({items:items,chat:chat,mem:mem}));
+const save=()=>{stamp();persist();scheduleSync()};
+let {items=[],chat=[],mem=[]}=load('sl_data',{});
+let st=Object.assign({provider:'anthropic',key:'',model:'claude-haiku-5-5',target:10000000,tts:false,persona:'',pu:0},load('sl_set',{}));
 const saveSet=()=>localStorage.setItem('sl_set',JSON.stringify(st));
 let undoSnap=null,lastMade=[],chatAll=false,snap=load('sl_snap',{}),tomb=load('sl_tomb',{});
-items=(Array.isArray(items)?items:[]).map(cleanItem).filter(Boolean);chat=cleanChat(chat);
+items=(Array.isArray(items)?items:[]).map(cleanItem).filter(Boolean);chat=cleanChat(chat);mem=cleanMem(mem);
 
 
 /* ===================== ORB: SPIRAL TITIK ===================== */
@@ -62,7 +66,7 @@ function openSheet(title,btns){ $('#sheetT').textContent=title;const b=$('#sheet
   $('#veil').style.display='block';$('#sheet').style.display='block'}
 function closeSheet(){$('#veil').style.display='none';$('#sheet').style.display='none'}
 $('#veil').onclick=closeSheet;
-function tab(n){$$('.screen').forEach(s=>s.classList.toggle('on',s.id==='s-'+n));$$('nav button').forEach(b=>{if(b.dataset.tab===n)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});scrollTo(0,0);renderAll()}
+function tab(n){const nn=n==='memori'?'atur':n;$$('.screen').forEach(s=>s.classList.toggle('on',s.id==='s-'+n));$$('nav button').forEach(b=>{if(b.dataset.tab===nn)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});scrollTo(0,0);renderAll()}
 $$('nav button').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
 
 /* ===================== KUNCI (BIOMETRIK) ===================== */
@@ -134,14 +138,25 @@ function applyActions(acts){
   return out;
 }
 
+function applyMemory(ops){
+  const out=[];
+  (Array.isArray(ops)?ops:[]).slice(0,4).forEach(o=>{try{
+    const t=String(o.text||'').trim().slice(0,200);
+    if(o.op==='add'){if(!t||SENS.test(t)||mem.some(m=>m.text.toLowerCase()===t.toLowerCase()))return;mem.push({id:uid(),text:t,cat:MCAT.includes(o.cat)?o.cat:'tentang saya',t:Date.now(),u:0});out.push('Diingat: '+t)}
+    else if(o.op==='update'){const m=mem.find(x=>x.id===o.id);if(m&&t&&!SENS.test(t)){m.text=t;out.push('Memori diperbarui: '+t)}}
+    else if(o.op==='forget'){const m=mem.find(x=>x.id===o.id);if(m){mem=mem.filter(x=>x!==m);out.push('Dilupakan: '+m.text)}}
+  }catch{}});
+  if(mem.length>MEM_MAX)mem=mem.sort((a,b)=>b.t-a.t).slice(0,MEM_MAX);
+  return out;
+}
 /* ===================== AI ===================== */
 function nowStr(){const d=new Date();return `${HARI[d.getDay()]}, ${iso(d).replace('T',' ')} (WIB)`}
 function sysPrompt(){
   const open=items.filter(i=>!i.done).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9')).slice(0,40).map(i=>`[${i.id}] ${i.type} | ${i.title} | ${i.category} | ${i.due||'-'}${i.amount?' | '+i.amount:''}`).join('\n')||'(kosong)';
-  return `Kamu "Satu Layar": asisten pribadi sekaligus teman dekat Raihan. Raihan mahasiswa kelas karyawan (kuliah malam Selasa–Kamis sekitar 17:30–21:30), kerja Sabtu–Senin sekitar 08:00–16:00 di beberapa tempat, plus freelance. Targetnya: IPK 4 dan pemasukan 2 digit juta per bulan dalam 5 tahun. Bicara bahasa Indonesia santai, hangat, singkat (maks 3 kalimat), tanpa ceramah.
+  return `Kamu "Satu Layar": asisten pribadi sekaligus teman dekat Raihan. Raihan mahasiswa kelas karyawan (kuliah malam Selasa–Kamis sekitar 17:30–21:30), kerja Sabtu–Senin sekitar 08:00–16:00 di beberapa tempat, plus freelance. Targetnya: IPK 4 dan pemasukan 2 digit juta per bulan dalam 5 tahun. Bicara bahasa Indonesia, singkat (maks 3 kalimat), tanpa ceramah. Gaya bicara mengikuti kepribadian di bawah.
 Sekarang: ${nowStr()}.
 Tugasmu: ubah tulisan/ucapan Raihan menjadi tindakan terstruktur. Balas HANYA satu objek JSON, tanpa teks lain:
-{"reply":"balasan singkat","actions":[ ... ]}
+{"reply":"balasan singkat","actions":[ ... ],"memory":[ ... ]}
 Aksi yang boleh:
 {"op":"add","type":"tugas|ujian|deadline|pengingat|belajar|catatan|pengeluaran|pemasukan","title":"...","category":"Kuliah|UQ|521 Marketing|Mubi|Divisi Grafika|Dakwah|Freelance|Pribadi|Keuangan","due":"YYYY-MM-DDTHH:mm" atau null,"remind":["YYYY-MM-DDTHH:mm"],"amount":angka rupiah atau null,"priority":1|2|3,"note":""}
 {"op":"done","id":"..."} {"op":"delete","id":"..."} {"op":"update","id":"...", field yang berubah}
@@ -153,6 +168,10 @@ Aturan:
 - Mengubah item yang sudah ada: pakai id dari daftar di bawah. "selesai" → op done.
 - Jika Raihan curhat, capek, atau tertekan: empati dulu, jangan menambah tugas kecuali diminta, tawarkan satu langkah kecil. Jika terdengar sangat berat atau menyakiti diri, sarankan bicara dengan orang tepercaya atau tenaga profesional, dan tetap temani.
 - Jika ambigu, buat dugaan terbaik dan sebut asumsimu di reply. Jika hanya ngobrol, actions [].
+Kepribadian yang Raihan minta (hanya mengatur gaya bicara di "reply"; format JSON dan aturan lain tetap berlaku; jangan merendahkan atau menyakiti Raihan secara pribadi, dan jika ia tampak sangat tertekan, kembalilah bersikap hangat): ${(st.persona||'').trim()||'ramah, hangat, santai seperti sahabat'}
+Field "memory" (opsional): simpan hanya hal penting dan tahan lama yang Raihan nyatakan sendiri: sifat atau kepribadiannya, preferensi, tujuan, orang penting, rutinitas, peristiwa besar. Format: {"op":"add","cat":"tentang saya|preferensi|tujuan|orang|rutinitas|peristiwa","text":"satu kalimat pendek"} atau {"op":"update","id":"...","text":"..."} atau {"op":"forget","id":"..."}. Maks 3 entri per balasan. Jangan simpan: kata sandi, PIN, API key, nomor kartu atau ID, hal sepele, atau kesimpulan/diagnosis yang tidak ia nyatakan sendiri. Jangan menduplikasi entri yang ada, pakai update. Jika Raihan meminta melupakan sesuatu, pakai forget dengan id yang tepat. Pakai memori secara alami hanya bila relevan, jangan menyebut kata "memori" kecuali ditanya, dan jangan mengungkit hal sensitif kecuali ia membahasnya.
+Memori saat ini:
+${mem.slice().sort((a,b)=>b.t-a.t).slice(0,60).map(m=>`[${m.id}] ${m.cat}: ${m.text}`).join('\n')||'(kosong)'}
 Daftar item terbuka:
 ${open}`;
 }
@@ -172,11 +191,13 @@ async function callAI(text){
     raw=(j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
   }
   const m=raw.match(/\{[\s\S]*\}/);
-  try{const o=JSON.parse(m[0]);return{reply:String(o.reply||'Siap.'),actions:Array.isArray(o.actions)?o.actions:[]}}
+  try{const o=JSON.parse(m[0]);return{reply:String(o.reply||'Siap.'),actions:Array.isArray(o.actions)?o.actions:[],memory:Array.isArray(o.memory)?o.memory:[]}}
   catch{return{reply:raw.slice(0,400),actions:[]}}
 }
 /* mode tanpa AI */
 function localParse(t){
+  const im=t.match(/^\s*ingat(?!kan)\s*(?:ya|bahwa)?[:,]?\s+(.{4,})/i);
+  if(im)return{reply:'Oke, saya ingat.',actions:[],memory:[{op:'add',cat:'tentang saya',text:im[1]}]};
   const l=t.toLowerCase();let amt=null;
   const m=l.match(/(\d{1,3}(?:\.\d{3})+|\d+(?:,\d+)?)\s*(rb|ribu|k|jt|juta)?(?![a-z])/);
   if(m){let raw=m[1];let n=/^\d{1,3}(\.\d{3})+$/.test(raw)?parseFloat(raw.replace(/\./g,'')):parseFloat(raw.replace(',','.'));const u=m[2];if(u==='jt'||u==='juta')n*=1e6;else if(u)n*=1e3;else if(n<1000)n=null;amt=n?Math.round(n):null}
@@ -199,7 +220,7 @@ async function send(text,voice){
   let out;
   try{out=st.key?await callAI(text):localParse(text)}
   catch(e){out={reply:'AI gagal dihubungi ('+String(e.message).slice(0,120)+'). Saya simpan sebagai catatan dulu.',actions:[{op:'add',type:'catatan',title:text}]}}
-  const acts=applyActions(out.actions);
+  const acts=applyActions(out.actions).concat(applyMemory(out.memory));
   chat.push({id:uid(),role:'assistant',text:out.reply,acts,undo:!!undoSnap,made:lastMade.slice(),voice:false});
   if(chat.length>60)chat=chat.slice(-60);
   save();setOrb('idle');renderAll();speak(out.reply);
@@ -333,12 +354,29 @@ function renderUang(){
   $('#trx').innerHTML=list.length?list.map(i=>`<div class="item" data-id="${esc(i.id)}"><div class="sp"><div class="t">${esc(i.title)}</div><div class="m"><span>${fmtDT(i.due)}</span></div></div><b>${i.type==='pemasukan'?'+':'−'}${rp(i.amount)}</b><button class="more" aria-label="Menu" data-more="${esc(i.id)}"><svg class="i" viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg></button></div>`).join(''):'<div class="empty">Belum ada catatan. Ucapkan "beli makan 25 ribu" atau "dapat gaji 1 juta".</div>';
   bindItems($('#trx'));
 }
+const PERSONAS=[['Ramah dan hangat','Ramah, hangat, dan menyemangati. Bicara lembut seperti sahabat dekat.'],['Tegas dan lugas','Tegas, singkat, langsung ke inti. Tidak basa-basi tapi tetap sopan.'],['Galak tapi peduli','Galak dan cerewet seperti kakak yang peduli. Boleh menegur kalau saya menunda-nunda, tapi tidak merendahkan.'],['Santai ala teman','Santai, bercanda ringan, bahasa gaul sehari-hari.'],['Tenang dan menenangkan','Sangat tenang dan pelan. Fokus menenangkan dan memecah tugas jadi langkah kecil.']];
+const fmtD=t=>{const d=new Date(t);return d.getDate()+' '+BLN[d.getMonth()]};
+function renderMemori(){
+  $('#persona').value=st.persona||'';
+  $('#personaChips').innerHTML=PERSONAS.map((p,i)=>`<button class="chip" data-p="${i}">${esc(p[0])}</button>`).join('');
+  $$('[data-p]').forEach(b=>b.onclick=()=>{$('#persona').value=PERSONAS[+b.dataset.p][1]});
+  $('#memCount').textContent=mem.length;
+  const list=mem.slice().sort((a,b)=>b.t-a.t),el=$('#memList');
+  el.innerHTML=list.length?list.map(m=>`<div class="item"><div class="sp"><div class="t">${esc(m.text)}</div><div class="m"><span class="tag">${esc(m.cat)}</span><span>${fmtD(m.t)}</span></div></div><button class="more" aria-label="Hapus memori" data-mdel="${esc(m.id)}"><svg class="i" viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg></button></div>`).join(''):'<div class="empty">Belum ada memori. Ceritakan sesuatu tentang diri Anda, misalnya "aku susah bangun subuh", dan saya akan mengingat hal pentingnya.</div>';
+  el.querySelectorAll('[data-mdel]').forEach(b=>b.onclick=()=>{mem=mem.filter(x=>x.id!==b.dataset.mdel);save();renderMemori();toast('Memori dihapus')});
+}
+$('#btnMem').onclick=()=>tab('memori');
+$('#memBack').onclick=()=>tab('atur');
+$('#personaSave').onclick=()=>{st.persona=$('#persona').value.trim().slice(0,600);st.pu=Date.now();saveSet();scheduleSync();toast(st.persona?'Kepribadian disimpan':'Kembali ke gaya bawaan')};
+$('#memAdd').onclick=()=>{const t=$('#memNew').value.trim().slice(0,200);if(!t)return;if(SENS.test(t)){toast('Jangan simpan kata sandi, PIN, atau nomor kartu di sini',3500);return}mem.push({id:uid(),text:t,cat:'tentang saya',t:Date.now(),u:0});$('#memNew').value='';save();renderMemori()};
+$('#memNew').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#memAdd').click()}});
+$('#memClear').onclick=()=>{if(!mem.length)return;if(confirm('Hapus semua memori? Chat dan jadwal tidak ikut terhapus.')){mem=[];save();renderMemori();toast('Semua memori dihapus')}};
 function renderAtur(){$('#prov').value=st.provider;$('#key').value=st.key;$('#model').value=st.model;$('#target').value=st.target;$('#tts').checked=!!st.tts;const c=load('sl_sync',null);if(c){$('#sbUrl').value=c.url||'';$('#sbKey').value=c.key||'';$('#sbPass').value=c.pass||''}setSyncStatus()}
 function renderAll(){
   $('#greet').textContent=`${greetWord()}, Raihan`;if(!listening)$('#greetsub').textContent=greetSub();
   renderChat();renderFocus();
   const on=document.querySelector('.screen.on').id;
-  if(on==='s-jadwal')renderJadwal();if(on==='s-uang')renderUang();if(on==='s-atur')renderAtur();
+  if(on==='s-jadwal')renderJadwal();if(on==='s-uang')renderUang();if(on==='s-atur')renderAtur();if(on==='s-memori')renderMemori();
 }
 
 /* ===================== PENGATURAN ===================== */
@@ -350,12 +388,12 @@ $('#tts').onchange=e=>{st.tts=e.target.checked;saveSet()};
 $('#btnLock').onclick=lock;
 $('#btnPin').onclick=async()=>{const v=prompt('PIN cadangan baru (4–6 angka):');if(v===null)return;if(!/^\d{4,6}$/.test(v)){toast('PIN harus 4–6 angka');return}localStorage.setItem('sl_pin',await sha('sl:'+v));toast('PIN cadangan tersimpan')};
 function dl(name,mime,data){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type:mime}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}
-$('#btnExport').onclick=()=>dl('satu-layar-cadangan.json','application/json',JSON.stringify({items,chat,st:{...st,key:''}},null,1));
+$('#btnExport').onclick=()=>dl('satu-layar-cadangan.json','application/json',JSON.stringify({items,chat,mem,st:{...st,key:''}},null,1));
 $('#btnImport').onclick=()=>$('#file').click();
-$('#file').onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());items=(Array.isArray(j.items)?j.items:[]).slice(0,5000).map(cleanItem).filter(Boolean);chat=cleanChat(j.chat);save();renderAll();toast('Data dipulihkan')}catch{toast('File tidak valid')}e.target.value=''};
+$('#file').onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());items=(Array.isArray(j.items)?j.items:[]).slice(0,5000).map(cleanItem).filter(Boolean);chat=cleanChat(j.chat);mem=cleanMem(j.mem);if(j.st&&typeof j.st.persona==='string'){st.persona=j.st.persona.slice(0,600);st.pu=Date.now();saveSet()}save();renderAll();toast('Data dipulihkan')}catch{toast('File tidak valid')}e.target.value=''};
 $('#btnClrChat').onclick=clearChat;
 $('#btnClrKey').onclick=()=>{if(confirm('Hapus API key dari perangkat ini?')){st.key='';saveSet();renderAtur();toast('API key dihapus')}};
-$('#btnReset').onclick=()=>{if(confirm('Hapus semua tugas, catatan uang, dan chat? Jika sinkron aktif, perangkat lain ikut terhapus.')){items=[];chat=[];save();renderAll();toast('Semua data dihapus')}};
+$('#btnReset').onclick=()=>{if(confirm('Hapus semua tugas, catatan uang, chat, dan memori? Jika sinkron aktif, perangkat lain ikut terhapus.')){items=[];chat=[];mem=[];save();renderAll();toast('Semua data dihapus')}};
 
 /* ===================== KALENDER .ics ===================== */
 const icsEsc=s=>String(s).replace(/[\\;,]/g,m=>'\\'+m).replace(/\n/g,'\\n');
@@ -463,6 +501,7 @@ function stamp(){
   const now=Date.now(),cur={};
   for(const it of items){const k='i:'+it.id,jn=JSON.stringify({...it,u:0,fired:0});cur[k]=jn;if(snap[k]!==jn||!it.u)it.u=now}
   for(const m of chat){cur['c:'+m.id]='1';if(!m.t)m.t=now}
+  for(const x of mem){const k='m:'+x.id,jn=JSON.stringify({...x,u:0});cur[k]=jn;if(snap[k]!==jn||!x.u)x.u=now}
   for(const k in snap)if(!(k in cur))tomb[k]=now;
   for(const k in cur)if(tomb[k]&&k[0]==='c')delete tomb[k];
   for(const k in tomb)if(now-tomb[k]>60*864e5)delete tomb[k];
@@ -480,15 +519,18 @@ function mergeState(L,R){
   const items=Object.values(map).filter(it=>!(tm['i:'+it.id]&&tm['i:'+it.id]>=(it.u||0)));
   const cm={};for(const m of [...(R.chat||[]),...(L.chat||[])])cm[m.id]=cm[m.id]||m;
   const chat=Object.values(cm).filter(m=>!tm['c:'+m.id]).sort((a,b)=>(a.t||0)-(b.t||0)).slice(-60);
-  const tl=L.target||{v:0,u:0},tr=R.target||{v:0,u:0};
-  return{items,chat,tomb:tm,target:(tr.u||0)>(tl.u||0)?tr:tl};
+  const mm={};for(const x of [...(R.mem||[]),...(L.mem||[])]){const c=mm[x.id];if(!c||(x.u||0)>=(c.u||0))mm[x.id]=x}
+  const mem=Object.values(mm).filter(x=>!(tm['m:'+x.id]&&tm['m:'+x.id]>=(x.u||0)));
+  const tl=L.target||{v:0,u:0},tr=R.target||{v:0,u:0},pl=L.persona||{v:'',u:0},pr=R.persona||{v:'',u:0};
+  return{items,chat,mem,tomb:tm,target:(tr.u||0)>(tl.u||0)?tr:tl,persona:(pr.u||0)>(pl.u||0)?pr:pl};
 }
-const sigOf=s=>(s.items||[]).map(i=>i.id+':'+i.u).sort().join()+'|'+(s.chat||[]).map(m=>m.id).sort().join()+'|'+Object.keys(s.tomb||{}).sort().join()+'|'+((s.target||{}).u||0);
+const sigOf=s=>(s.mem||[]).map(x=>x.id+':'+x.u).sort().join()+'#'+((s.persona||{}).u||0)+'#'+(s.items||[]).map(i=>i.id+':'+i.u).sort().join()+'|'+(s.chat||[]).map(m=>m.id).sort().join()+'|'+Object.keys(s.tomb||{}).sort().join()+'|'+((s.target||{}).u||0);
 function applyMerged(m){
-  items=m.items.map(cleanItem).filter(Boolean);chat=cleanChat(m.chat);tomb=m.tomb||{};
+  items=m.items.map(cleanItem).filter(Boolean);chat=cleanChat(m.chat);mem=cleanMem(m.mem);tomb=m.tomb||{};
+  if(m.persona&&typeof m.persona.v==='string'&&(m.persona.u||0)>(st.pu||0)){st.persona=m.persona.v.slice(0,600);st.pu=m.persona.u;saveSet()}
   if(m.target&&m.target.v&&(m.target.u||0)>(st.tu||0)){st.target=m.target.v;st.tu=m.target.u;saveSet()}
-  snap={};for(const it of items)snap['i:'+it.id]=JSON.stringify({...it,u:0,fired:0});for(const x of chat)snap['c:'+x.id]='1';
-  persistSnap();localStorage.setItem('sl_data',JSON.stringify({items:items,chat:chat}));
+  snap={};for(const it of items)snap['i:'+it.id]=JSON.stringify({...it,u:0,fired:0});for(const x of chat)snap['c:'+x.id]='1';for(const x of mem)snap['m:'+x.id]=JSON.stringify({...x,u:0});
+  persistSnap();persist();
   renderAll();
 }
 async function syncNow(manual){
@@ -502,11 +544,11 @@ async function syncNow(manual){
       const row=Array.isArray(res)&&res[0]?res[0]:null;let remote=null,ver=0;
       if(row){ver=row.ver;try{remote=JSON.parse(await decryptTxt(key,row.blob))}catch{throw new Error('Kode sinkron tidak cocok dengan data di server')}}
       stamp();
-      const local={items,chat,tomb,target:{v:st.target,u:st.tu||0}};
+      const local={items,chat,mem,tomb,target:{v:st.target,u:st.tu||0},persona:{v:st.persona||'',u:st.pu||0}};
       const m=remote?mergeState(local,remote):local;
       if(sigOf(m)!==sigOf(local))applyMerged(m);
       if(remote&&sigOf(remote)===sigOf(m)){done=true;break}
-      const out=await encryptTxt(key,JSON.stringify({items:m.items,chat:m.chat,tomb:m.tomb,target:m.target}));
+      const out=await encryptTxt(key,JSON.stringify({items:m.items,chat:m.chat,mem:m.mem,tomb:m.tomb,target:m.target,persona:m.persona}));
       const nv=await rpc(c,'put_blob',{p_id:id,p_data:out,p_expected:ver});
       if(nv!==-1)done=true;
     }

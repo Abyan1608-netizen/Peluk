@@ -144,6 +144,13 @@ svg.i{width:24px;height:24px;fill:currentColor}
 #listenTx{min-height:56px;max-width:32ch;margin:0 0 6px}
 #listen .stack{width:min(300px,86vw)}
 @media (prefers-reduced-motion:reduce){#listen.on{animation:none}}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.chip{min-height:44px;padding:0 14px;border-radius:999px;background:var(--a);font-weight:700;font-size:14px;text-align:left}
+textarea.in{padding:12px 14px;line-height:1.5;resize:vertical;min-height:110px}
+.back{min-height:44px;padding:0 4px;font-weight:700;margin:-8px 0 6px;display:inline-flex;align-items:center}
+.mrow{display:flex;gap:8px;margin-top:12px}
+.mrow .in{flex:1}
+.mrow .btn{min-height:48px;padding:0 20px}
 #veil{position:fixed;inset:0;background:rgba(23,107,135,.35);z-index:40;display:none}
 #sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;background:var(--bg);border-top:1.5px solid var(--b);border-radius:24px 24px 0 0;padding:20px 16px calc(18px + env(safe-area-inset-bottom));display:none}
 #sheet .inner{max-width:560px;margin:0 auto}
@@ -207,10 +214,34 @@ svg.i{width:24px;height:24px;fill:currentColor}
     <div id="trx"></div>
   </section>
 
+  <!-- Memori -->
+  <section class="screen" id="s-memori" aria-label="Memori">
+    <button class="back" id="memBack">‹ Pengaturan</button>
+    <h2>Memori</h2>
+    <p class="sub">Hal penting yang asisten ingat tentang Anda. Tetap ada walau chat dihapus. Anda bisa membaca dan menghapusnya di sini.</p>
+
+    <h3>Kepribadian asisten</h3>
+    <div class="card">
+      <label class="f" for="persona" style="margin-top:0">Tulis dengan bahasa Anda sendiri</label>
+      <textarea class="in" id="persona" maxlength="600" placeholder="Contoh: Bicara tegas seperti kakak yang galak tapi peduli. Jangan basa-basi."></textarea>
+      <div class="chips" id="personaChips"></div>
+      <div class="stack" style="margin-top:14px"><button class="btn" id="personaSave">Simpan kepribadian</button></div>
+    </div>
+
+    <h3>Yang saya ingat (<span id="memCount">0</span>)</h3>
+    <div id="memList"></div>
+    <div class="mrow">
+      <input class="in" id="memNew" maxlength="200" placeholder="Tambah sesuatu untuk diingat" autocomplete="off">
+      <button class="btn sec" id="memAdd">Tambah</button>
+    </div>
+    <div class="stack" style="margin-top:22px"><button class="btn danger" id="memClear">Hapus semua memori</button></div>
+  </section>
+
   <!-- Atur -->
   <section class="screen" id="s-atur" aria-label="Pengaturan">
     <h2>Pengaturan</h2>
     <p class="sub">Semua data tersimpan hanya di perangkat ini.</p>
+    <button class="btn sec" id="btnMem" style="width:100%;margin-bottom:12px">Memori dan kepribadian asisten</button>
 
     <div class="card">
       <label class="f" for="prov" style="margin-top:0">Mesin AI</label>
