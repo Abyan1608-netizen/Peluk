@@ -1,28 +1,21 @@
-# Satu Layar
+# peluk (Satu Layar)
 
-Asisten pribadi: tulis atau ucapkan, AI yang menyusun jadwal, alarm, dan catatan uang.
+Asisten pribadi untuk waktu, belajar, dan uang. Tulis atau ucapkan, tersusun sendiri.
 
-## Pasang di GitHub Pages (5 menit)
-1. github.com -> New repository -> nama `satu-layar` -> Public -> Create.
-2. Upload semua file di folder ini (Add file -> Upload files) -> Commit.
-3. Settings -> Pages -> Source: Deploy from a branch -> `main` / root -> Save.
-4. Tunggu 1-2 menit. Alamat: `https://USERNAME.github.io/satu-layar/`
-5. Buka di HP dan Mac. Pasang ke layar utama:
-   - Android Chrome: menu titik tiga -> Install app
-   - iPhone Safari: Share -> Add to Home Screen
-   - Mac Chrome: ikon install di address bar
+## Pasang di GitHub Pages
+1. Repo `peluk` (Public) -> upload semua file (termasuk `app.js`) -> Commit.
+2. Settings -> Pages -> Deploy from a branch -> `main` / root -> Save.
+3. Buka `https://USERNAME.github.io/peluk/` di HP dan Mac, lalu pasang ke layar utama.
 
-## Pakai
-1. Buka -> daftarkan sidik jari (sekali) -> masuk.
-2. Atur -> pilih mesin AI -> tempel API key.
-   - Claude: console.anthropic.com (model default claude-haiku-5-5, murah)
-   - Gemini: aistudio.google.com/apikey (cek apakah masih ada paket gratis)
-   Pasang batas pengeluaran bulanan di dashboard penyedia.
-3. Ketuk lingkaran dan bicara, atau ketik di kotak bawah.
+## API key (di tiap perangkat, satu kali)
+Atur -> pilih mesin AI -> tempel key.
+- Claude: console.anthropic.com (isi saldo, pasang batas bulanan)
+- Gemini: aistudio.google.com/apikey
 
-## Catatan jujur
-- Kunci sidik jari adalah gerbang di perangkat ini, bukan enkripsi. Data ada di localStorage browser.
-- Repo publik hanya berisi kode. API key dan data Anda tidak ikut ter-upload.
-- Alarm berbunyi saat aplikasi terbuka. Untuk alarm saat tertutup: Atur -> Ekspor ke Kalender (.ics) -> buka file di HP.
-- Suara memakai pengenalan suara browser (Chrome/Safari). Butuh internet.
-- Cadangkan data rutin lewat Atur -> Cadangkan data.
+## Keamanan
+- Key dan data hanya di browser perangkat. Repo publik hanya berisi kode.
+- Content Security Policy aktif: aplikasi hanya boleh menghubungi api.anthropic.com dan generativelanguage.googleapis.com.
+- Semua teks dari AI dan dari file cadangan disaring sebelum ditampilkan.
+- Sidik jari = gerbang di perangkat, bukan enkripsi. Jangan pakai di komputer bersama.
+- HP hilang atau key bocor: cabut (revoke) key di dashboard penyedia, lalu buat baru.
+- Jangan pernah menaruh API key di file atau repo.
