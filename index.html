@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://api.anthropic.com https://generativelanguage.googleapis.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://api.anthropic.com https://generativelanguage.googleapis.com https://*.supabase.co; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title>Satu Layar</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -229,6 +229,24 @@ svg.i{width:24px;height:24px;fill:currentColor}
       <label class="f" for="target" style="margin-top:0">Target pemasukan per bulan (Rp)</label>
       <input class="in" id="target" inputmode="numeric" autocomplete="off">
       <div class="sw" style="margin-top:8px"><span>Asisten membacakan balasan</span><input type="checkbox" id="tts" style="width:26px;height:26px"></div>
+    </div>
+
+    <h3>Sinkron antar perangkat</h3>
+    <div class="card">
+      <label class="f" for="sbUrl" style="margin-top:0">Alamat proyek Supabase</label>
+      <input class="in" id="sbUrl" placeholder="https://xxxx.supabase.co" autocomplete="off" inputmode="url">
+      <label class="f" for="sbKey">Kunci publik (anon atau publishable)</label>
+      <input class="in" id="sbKey" type="password" autocomplete="off">
+      <label class="f" for="sbPass">Kode sinkron (sama di semua perangkat)</label>
+      <input class="in" id="sbPass" type="password" autocomplete="off">
+      <div class="stack" style="margin-top:14px">
+        <button class="btn" id="sbSave">Simpan dan sinkronkan</button>
+        <button class="btn sec" id="sbGen">Buat kode sinkron baru</button>
+        <button class="btn sec" id="sbCopy">Salin kode sinkron</button>
+        <button class="btn sec" id="sbSql">Salin SQL pengaturan database</button>
+        <button class="btn danger" id="sbOff">Matikan sinkron</button>
+      </div>
+      <p class="hint" id="sbStatus">Belum aktif.</p>
     </div>
 
     <h3>Alarm dan kalender</h3>

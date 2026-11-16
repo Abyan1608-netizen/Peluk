@@ -21,23 +21,23 @@ function cleanItem(i){
     title:String(i.title||'').slice(0,160),category:CAT[i.category]?i.category:'Pribadi',due:okDT(i.due)?i.due:null,
     remind:(Array.isArray(i.remind)?i.remind:[]).filter(okDT),fired:(Array.isArray(i.fired)?i.fired:[]).filter(okDT),
     amount:Number.isFinite(amt)?amt:null,priority:[1,2,3].includes(+i.priority)?+i.priority:2,
-    note:String(i.note||'').slice(0,300),done:!!i.done,created:+i.created||Date.now()};
+    note:String(i.note||'').slice(0,300),done:!!i.done,created:+i.created||Date.now(),u:+i.u||0};
 }
 function cleanChat(c){
   return(Array.isArray(c)?c:[]).filter(m=>m&&['user','assistant'].includes(m.role)).slice(-60).map(m=>({
     id:/^[a-z0-9]{1,12}$/i.test(String(m.id))?String(m.id):uid(),role:m.role,text:String(m.text||'').slice(0,2000),
-    voice:!!m.voice,acts:(Array.isArray(m.acts)?m.acts:[]).slice(0,10).map(x=>String(x).slice(0,200)),
+    voice:!!m.voice,t:+m.t||0,acts:(Array.isArray(m.acts)?m.acts:[]).slice(0,10).map(x=>String(x).slice(0,200)),
     made:(Array.isArray(m.made)?m.made:[]).filter(x=>/^[a-z0-9]{1,12}$/i.test(String(x))).map(String),undo:false}));
 }
 const isMoney=i=>MONEY.includes(i.type);
 
 /* ===================== DATA ===================== */
 const load=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
-const save=()=>{localStorage.setItem('sl_data',JSON.stringify({items:items,chat:chat}));};
+const save=()=>{stamp();localStorage.setItem('sl_data',JSON.stringify({items:items,chat:chat}));scheduleSync()};
 let {items=[],chat=[]}=load('sl_data',{});
 let st=Object.assign({provider:'anthropic',key:'',model:'claude-haiku-5-5',target:10000000,tts:false},load('sl_set',{}));
 const saveSet=()=>localStorage.setItem('sl_set',JSON.stringify(st));
-let undoSnap=null,lastMade=[],chatAll=false;
+let undoSnap=null,lastMade=[],chatAll=false,snap=load('sl_snap',{}),tomb=load('sl_tomb',{});
 items=(Array.isArray(items)?items:[]).map(cleanItem).filter(Boolean);chat=cleanChat(chat);
 
 
@@ -66,7 +66,7 @@ function tab(n){$$('.screen').forEach(s=>s.classList.toggle('on',s.id==='s-'+n))
 $$('nav button').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
 
 /* ===================== KUNCI (BIOMETRIK) ===================== */
-const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
+const b64=b=>{const u=new Uint8Array(b);let s='';for(let i=0;i<u.length;i+=0x8000)s+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(s)};
 const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 const rnd=n=>crypto.getRandomValues(new Uint8Array(n));
 const sha=async t=>b64(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)));
@@ -106,7 +106,7 @@ $('#pinok').onclick=async()=>{
   if(await sha('sl:'+v)===localStorage.getItem('sl_pin'))unlock();else{lmsg('PIN salah.');$('#pin').value=''}
 };
 $('#pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('#pinok').click()});
-function unlock(){document.body.classList.remove('locked');lmsg('');$('#pinbox').classList.add('hide');$('#bioBtn').classList.remove('hide');renderAll();startAlarmLoop()}
+function unlock(){document.body.classList.remove('locked');lmsg('');$('#pinbox').classList.add('hide');$('#bioBtn').classList.remove('hide');renderAll();startAlarmLoop();syncNow()}
 function lock(){document.body.classList.add('locked');lockInit()}
 let hiddenAt=0;
 document.addEventListener('visibilitychange',()=>{if(document.hidden)hiddenAt=Date.now();else if(!document.body.classList.contains('locked')&&hiddenAt&&Date.now()-hiddenAt>90000)lock()});
@@ -333,7 +333,7 @@ function renderUang(){
   $('#trx').innerHTML=list.length?list.map(i=>`<div class="item" data-id="${esc(i.id)}"><div class="sp"><div class="t">${esc(i.title)}</div><div class="m"><span>${fmtDT(i.due)}</span></div></div><b>${i.type==='pemasukan'?'+':'−'}${rp(i.amount)}</b><button class="more" aria-label="Menu" data-more="${esc(i.id)}"><svg class="i" viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg></button></div>`).join(''):'<div class="empty">Belum ada catatan. Ucapkan "beli makan 25 ribu" atau "dapat gaji 1 juta".</div>';
   bindItems($('#trx'));
 }
-function renderAtur(){$('#prov').value=st.provider;$('#key').value=st.key;$('#model').value=st.model;$('#target').value=st.target;$('#tts').checked=!!st.tts}
+function renderAtur(){$('#prov').value=st.provider;$('#key').value=st.key;$('#model').value=st.model;$('#target').value=st.target;$('#tts').checked=!!st.tts;const c=load('sl_sync',null);if(c){$('#sbUrl').value=c.url||'';$('#sbKey').value=c.key||'';$('#sbPass').value=c.pass||''}setSyncStatus()}
 function renderAll(){
   $('#greet').textContent=`${greetWord()}, Raihan`;if(!listening)$('#greetsub').textContent=greetSub();
   renderChat();renderFocus();
@@ -345,7 +345,7 @@ function renderAll(){
 $('#prov').onchange=e=>{st.provider=e.target.value;st.model=st.provider==='anthropic'?'claude-haiku-5-5':'gemini-2.5-flash';saveSet();renderAtur()};
 $('#key').onchange=e=>{st.key=e.target.value.trim();saveSet();toast('API key tersimpan')};
 $('#model').onchange=e=>{st.model=e.target.value.trim();saveSet()};
-$('#target').onchange=e=>{st.target=parseInt(e.target.value.replace(/\D/g,''))||10000000;saveSet();renderAtur()};
+$('#target').onchange=e=>{st.target=parseInt(e.target.value.replace(/\D/g,''))||10000000;st.tu=Date.now();saveSet();renderAtur();scheduleSync()};
 $('#tts').onchange=e=>{st.tts=e.target.checked;saveSet()};
 $('#btnLock').onclick=lock;
 $('#btnPin').onclick=async()=>{const v=prompt('PIN cadangan baru (4–6 angka):');if(v===null)return;if(!/^\d{4,6}$/.test(v)){toast('PIN harus 4–6 angka');return}localStorage.setItem('sl_pin',await sha('sl:'+v));toast('PIN cadangan tersimpan')};
@@ -355,7 +355,7 @@ $('#btnImport').onclick=()=>$('#file').click();
 $('#file').onchange=async e=>{try{const j=JSON.parse(await e.target.files[0].text());items=(Array.isArray(j.items)?j.items:[]).slice(0,5000).map(cleanItem).filter(Boolean);chat=cleanChat(j.chat);save();renderAll();toast('Data dipulihkan')}catch{toast('File tidak valid')}e.target.value=''};
 $('#btnClrChat').onclick=clearChat;
 $('#btnClrKey').onclick=()=>{if(confirm('Hapus API key dari perangkat ini?')){st.key='';saveSet();renderAtur();toast('API key dihapus')}};
-$('#btnReset').onclick=()=>{if(confirm('Hapus semua tugas, catatan uang, dan chat di perangkat ini?')){items=[];chat=[];save();renderAll();toast('Semua data dihapus')}};
+$('#btnReset').onclick=()=>{if(confirm('Hapus semua tugas, catatan uang, dan chat? Jika sinkron aktif, perangkat lain ikut terhapus.')){items=[];chat=[];save();renderAll();toast('Semua data dihapus')}};
 
 /* ===================== KALENDER .ics ===================== */
 const icsEsc=s=>String(s).replace(/[\\;,]/g,m=>'\\'+m).replace(/\n/g,'\\n');
@@ -404,6 +404,131 @@ function checkAlarms(){
   save();
 }
 function startAlarmLoop(){if(alarmLoop)return;checkAlarms();alarmLoop=setInterval(checkAlarms,15000)}
+
+/* ===================== SINKRON (SUPABASE, TERENKRIPSI) ===================== */
+const SQL_SETUP=`create table if not exists public.peluk_sync (
+  id text primary key check (char_length(id) between 32 and 128),
+  data text not null check (char_length(data) <= 4000000),
+  version bigint not null default 1,
+  updated_at timestamptz not null default now()
+);
+alter table public.peluk_sync enable row level security;
+
+create or replace function public.get_blob(p_id text)
+returns table(blob text, ver bigint)
+language sql security definer set search_path = public as $$
+  select data, version from public.peluk_sync where id = p_id;
+$$;
+
+create or replace function public.put_blob(p_id text, p_data text, p_expected bigint)
+returns bigint language plpgsql security definer set search_path = public as $$
+declare v bigint;
+begin
+  if p_expected = 0 then
+    insert into public.peluk_sync(id, data, version) values (p_id, p_data, 1)
+    on conflict do nothing returning version into v;
+  else
+    update public.peluk_sync set data = p_data, version = version + 1, updated_at = now()
+    where id = p_id and version = p_expected returning version into v;
+  end if;
+  return coalesce(v, -1);
+end $$;
+
+revoke all on function public.get_blob(text) from public;
+revoke all on function public.put_blob(text, text, bigint) from public;
+grant execute on function public.get_blob(text) to anon, authenticated;
+grant execute on function public.put_blob(text, text, bigint) to anon, authenticated;`;
+const te=new TextEncoder(),td=new TextDecoder();
+let kcache=null,syncing=false,syncTimer=null,syncInfo='';
+const syncCfg=()=>{const c=load('sl_sync',null);return c&&c.url&&c.key&&c.pass?c:null};
+function setSyncStatus(t){if(t!==undefined)syncInfo=t;const e=$('#sbStatus');if(e)e.textContent=syncInfo||(syncCfg()?'Aktif.':'Belum aktif.')}
+async function deriveKeys(pass){
+  if(kcache&&kcache.p===pass)return kcache;
+  const base=await crypto.subtle.importKey('raw',te.encode(pass),'PBKDF2',false,['deriveBits']);
+  const bits=new Uint8Array(await crypto.subtle.deriveBits({name:'PBKDF2',salt:te.encode('peluk-sync-v1'),iterations:250000,hash:'SHA-256'},base,512));
+  const key=await crypto.subtle.importKey('raw',bits.slice(0,32),'AES-GCM',false,['encrypt','decrypt']);
+  const id=[...bits.slice(32)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  return kcache={p:pass,id,key};
+}
+async function encryptTxt(key,text){const iv=crypto.getRandomValues(new Uint8Array(12));const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,te.encode(text)));const o=new Uint8Array(12+ct.length);o.set(iv);o.set(ct,12);return b64(o)}
+async function decryptTxt(key,s){const a=unb64(s);return td.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:a.slice(0,12)},key,a.slice(12)))}
+async function rpc(c,fn,args){
+  const hd={'content-type':'application/json',apikey:c.key};if(c.key.startsWith('eyJ'))hd.Authorization='Bearer '+c.key;
+  const r=await fetch(c.url.replace(/\/+$/,'')+'/rest/v1/rpc/'+fn,{method:'POST',headers:hd,body:JSON.stringify(args)});
+  if(!r.ok){let m='';try{m=(await r.json()).message||''}catch{}throw new Error('HTTP '+r.status+(m?' · '+m:''))}
+  return r.json();
+}
+/* penanda perubahan: tiap item/pesan diberi cap waktu, penghapusan dicatat sebagai nisan */
+function stamp(){
+  const now=Date.now(),cur={};
+  for(const it of items){const k='i:'+it.id,jn=JSON.stringify({...it,u:0,fired:0});cur[k]=jn;if(snap[k]!==jn||!it.u)it.u=now}
+  for(const m of chat){cur['c:'+m.id]='1';if(!m.t)m.t=now}
+  for(const k in snap)if(!(k in cur))tomb[k]=now;
+  for(const k in cur)if(tomb[k]&&k[0]==='c')delete tomb[k];
+  for(const k in tomb)if(now-tomb[k]>60*864e5)delete tomb[k];
+  snap=cur;persistSnap();
+}
+function persistSnap(){localStorage.setItem('sl_snap',JSON.stringify(snap));localStorage.setItem('sl_tomb',JSON.stringify(tomb))}
+function mergeState(L,R){
+  const tm={...(L.tomb||{})};for(const k in (R.tomb||{}))tm[k]=Math.max(tm[k]||0,R.tomb[k]);
+  const map={};
+  for(const it of [...(R.items||[]),...(L.items||[])]){
+    const c=map[it.id];
+    if(!c)map[it.id]=it;
+    else{const w=(it.u||0)>=(c.u||0)?it:c;map[it.id]={...w,fired:[...new Set([...(c.fired||[]),...(it.fired||[])])]}}
+  }
+  const items=Object.values(map).filter(it=>!(tm['i:'+it.id]&&tm['i:'+it.id]>=(it.u||0)));
+  const cm={};for(const m of [...(R.chat||[]),...(L.chat||[])])cm[m.id]=cm[m.id]||m;
+  const chat=Object.values(cm).filter(m=>!tm['c:'+m.id]).sort((a,b)=>(a.t||0)-(b.t||0)).slice(-60);
+  const tl=L.target||{v:0,u:0},tr=R.target||{v:0,u:0};
+  return{items,chat,tomb:tm,target:(tr.u||0)>(tl.u||0)?tr:tl};
+}
+const sigOf=s=>(s.items||[]).map(i=>i.id+':'+i.u).sort().join()+'|'+(s.chat||[]).map(m=>m.id).sort().join()+'|'+Object.keys(s.tomb||{}).sort().join()+'|'+((s.target||{}).u||0);
+function applyMerged(m){
+  items=m.items.map(cleanItem).filter(Boolean);chat=cleanChat(m.chat);tomb=m.tomb||{};
+  if(m.target&&m.target.v&&(m.target.u||0)>(st.tu||0)){st.target=m.target.v;st.tu=m.target.u;saveSet()}
+  snap={};for(const it of items)snap['i:'+it.id]=JSON.stringify({...it,u:0,fired:0});for(const x of chat)snap['c:'+x.id]='1';
+  persistSnap();localStorage.setItem('sl_data',JSON.stringify({items:items,chat:chat}));
+  renderAll();
+}
+async function syncNow(manual){
+  const c=syncCfg();if(!c||syncing||document.body.classList.contains('locked'))return;
+  syncing=true;if(manual)setSyncStatus('Menyinkronkan…');
+  try{
+    const {id,key}=await deriveKeys(c.pass);
+    let done=false;
+    for(let n=0;n<4&&!done;n++){
+      const res=await rpc(c,'get_blob',{p_id:id});
+      const row=Array.isArray(res)&&res[0]?res[0]:null;let remote=null,ver=0;
+      if(row){ver=row.ver;try{remote=JSON.parse(await decryptTxt(key,row.blob))}catch{throw new Error('Kode sinkron tidak cocok dengan data di server')}}
+      stamp();
+      const local={items,chat,tomb,target:{v:st.target,u:st.tu||0}};
+      const m=remote?mergeState(local,remote):local;
+      if(sigOf(m)!==sigOf(local))applyMerged(m);
+      if(remote&&sigOf(remote)===sigOf(m)){done=true;break}
+      const out=await encryptTxt(key,JSON.stringify({items:m.items,chat:m.chat,tomb:m.tomb,target:m.target}));
+      const nv=await rpc(c,'put_blob',{p_id:id,p_data:out,p_expected:ver});
+      if(nv!==-1)done=true;
+    }
+    const d=new Date();setSyncStatus(done?`Tersinkron pukul ${pad(d.getHours())}:${pad(d.getMinutes())}`:'Sinkron bentrok, akan dicoba lagi.');
+  }catch(e){setSyncStatus('Sinkron gagal: '+String(e.message).slice(0,140));if(manual)toast('Sinkron gagal',3000)}
+  syncing=false;
+}
+function scheduleSync(){if(!syncCfg())return;clearTimeout(syncTimer);syncTimer=setTimeout(()=>syncNow(),3000)}
+function genCode(){const A='abcdefghjkmnpqrstuvwxyz23456789',r=crypto.getRandomValues(new Uint8Array(20));return [0,1,2,3,4].map(g=>[...r.slice(g*4,g*4+4)].map(b=>A[b%A.length]).join('')).join('-')}
+$('#sbGen').onclick=()=>{$('#sbPass').type='text';$('#sbPass').value=genCode();toast('Kode dibuat. Salin, lalu tempel di perangkat lain.',3500)};
+$('#sbCopy').onclick=async()=>{const v=$('#sbPass').value;if(!v){toast('Belum ada kode');return}try{await navigator.clipboard.writeText(v);toast('Kode disalin')}catch{$('#sbPass').type='text';toast('Salin manual dari kolom')}};
+$('#sbSql').onclick=async()=>{try{await navigator.clipboard.writeText(SQL_SETUP);toast('SQL disalin. Tempel di Supabase, menu SQL Editor.',4000)}catch{toast('Gagal menyalin. Pakai file supabase-setup.sql di repo.',4000)}};
+$('#sbSave').onclick=()=>{
+  const url=$('#sbUrl').value.trim().replace(/\/+$/,''),key=$('#sbKey').value.trim(),pass=$('#sbPass').value.trim();
+  if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)){toast('Alamat harus berbentuk https://xxxx.supabase.co',4000);return}
+  if(key.length<20){toast('Kunci publik belum diisi');return}
+  if(pass.length<16){toast('Kode sinkron minimal 16 karakter. Pakai tombol Buat kode baru.',4000);return}
+  localStorage.setItem('sl_sync',JSON.stringify({url,key,pass}));kcache=null;syncNow(true);
+};
+$('#sbOff').onclick=()=>{if(confirm('Matikan sinkron di perangkat ini? Data tetap ada di sini.')){localStorage.removeItem('sl_sync');kcache=null;setSyncStatus('Belum aktif.');renderAtur()}};
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)syncNow()});
+setInterval(()=>{if(!document.hidden)syncNow()},60000);
 
 /* ===================== MULAI ===================== */
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});

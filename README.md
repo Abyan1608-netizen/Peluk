@@ -19,3 +19,12 @@ Atur -> pilih mesin AI -> tempel key.
 - Sidik jari = gerbang di perangkat, bukan enkripsi. Jangan pakai di komputer bersama.
 - HP hilang atau key bocor: cabut (revoke) key di dashboard penyedia, lalu buat baru.
 - Jangan pernah menaruh API key di file atau repo.
+
+## Sinkron antar perangkat (Supabase, gratis)
+1. supabase.com -> New project (gratis). Catat region terdekat (mis. Singapore).
+2. SQL Editor -> New query -> tempel isi `supabase-setup.sql` -> Run.
+3. Project Settings -> API: salin **Project URL** dan kunci **anon / publishable**.
+4. Di aplikasi: Atur -> Sinkron antar perangkat -> tempel URL dan kunci -> **Buat kode sinkron baru** -> Simpan dan sinkronkan.
+5. Di perangkat lain: isi URL, kunci, dan **kode sinkron yang sama persis**.
+
+Data dienkripsi (AES-GCM) di perangkat sebelum dikirim. Server hanya menyimpan teks acak. Kode sinkron tidak pernah dikirim. Kalau kode hilang, data di server tidak bisa dibuka lagi. Kunci API Claude tidak ikut disinkronkan.
